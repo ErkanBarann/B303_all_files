@@ -17,7 +17,7 @@ At the end of the this hands-on training, students will be able to;
 - Part 2 - Getting familiar with Public Hosted Zone, SOA, NS.  
 - Part 3 - Creating A record set
 - Part 4 - Creating CNAME record set
-- Part 4 - Creating an Alias record set
+- Part 5 - Creating an Alias record set
 
 ## Part 1 - Prep.
 
@@ -133,7 +133,7 @@ Parameters:
 Mappings:
   RegionImageMap:
     us-east-1:
-      AMI: ami-0c2b8ca1dad447f8a
+      AMI: ami-085ad6ae776d8f09c
     us-east-2:
       AMI: ami-0443305dabd4be2bc
     us-west-1:
@@ -142,29 +142,35 @@ Mappings:
       AMI: ami-083ac7c7ecf9bb9b0
     eu-west-1:
       AMI: ami-02b4e72b17337d6c1
+
 Resources:
- 
   myAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      AvailabilityZones: !GetAZs 
-      LaunchConfigurationName: !Ref myLaunchConfig
+      LaunchTemplate:
+        LaunchTemplateId: !Ref myLaunchLT
+        Version: 1
       HealthCheckType: ELB
       HealthCheckGracePeriod: 300
-      MinSize: '2'
-      MaxSize: '3'
+      MinSize: 2
+      MaxSize: 3
       TargetGroupARNs:
         - !Ref myALBTargetGroup
+      VPCZoneIdentifier: !Ref Subnets
   
-  myLaunchConfig:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  myLaunchLT:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      KeyName: !Ref KeyName
-      ImageId: !FindInMap 
-        - RegionImageMap
-        - !Ref AWS::Region
-        - AMI
-      UserData: !Base64 |
+      LaunchTemplateData:
+        ImageId: !FindInMap 
+          - RegionImageMap
+          - !Ref "AWS::Region"
+          - AMI
+        InstanceType: !Ref InstanceType
+        KeyName: !Ref KeyName
+        SecurityGroupIds:
+          - !GetAtt mySecurityGroup.GroupId
+        UserData: !Base64 |
           #!/bin/bash
           yum update -y
           yum install -y httpd
@@ -187,12 +193,11 @@ Resources:
           </html>" > /var/www/html/index.html
           systemctl start httpd
           systemctl enable httpd
-      SecurityGroups:
-        - !Ref mySecurityGroup
-      InstanceType: !Ref InstanceType
+        
+        
   
   myCPUPolicy:
-    Type: "AWS::AutoScaling::ScalingPolicy"
+    Type: AWS::AutoScaling::ScalingPolicy
     Properties:
       AutoScalingGroupName: !Ref myAutoScalingGroup
       PolicyType: TargetTrackingScaling
@@ -203,7 +208,7 @@ Resources:
   
 
   myApplicationLoadBalancer:
-    Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       SecurityGroups:
         - !GetAtt mySecurityGroup.GroupId
@@ -212,7 +217,7 @@ Resources:
   
 
   myALBListener:
-    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions: 
         - Type: forward
@@ -223,7 +228,7 @@ Resources:
   
   
   myALBTargetGroup:
-    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       HealthCheckIntervalSeconds: 25
       HealthCheckTimeoutSeconds: 5
@@ -235,7 +240,7 @@ Resources:
   
   
   mySecurityGroup:
-    Type: "AWS::EC2::SecurityGroup"
+    Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Enables SSH and HTTP
       SecurityGroupIngress:
@@ -248,8 +253,6 @@ Resources:
           ToPort: 80
           CidrIp: 0.0.0.0/0
           
-    
-  
 Outputs:
   URL:
     Description: The URL of the website
@@ -258,7 +261,6 @@ Outputs:
       - - 'http://'
         - !GetAtt myApplicationLoadBalancer.DNSName
 ```
-
 
 ## Part 2 - Getting familiar with Route 53 Public Hosted Zone, SOA, NS. 
 Explain that Public hosted Zone and permanent records SOA nad NS. 
