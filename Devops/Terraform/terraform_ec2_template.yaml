@@ -1,0 +1,48 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Terraform yüklü Ubuntu 24.04 EC2 Instance ve SSH Security Group"
+
+Resources:
+  TerraformInstance:
+    Type: "AWS::EC2::Instance"
+    Properties:
+      ImageId: ami-04b4f1a9cf54c11d0
+      InstanceType: "t2.micro"
+      SecurityGroupIds:
+        - !Ref TerraformSecurityGroup
+      KeyName: !Ref KeyPairName
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          wget -O - https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+          sudo apt update && sudo apt install terraform
+      Tags:
+        - Key: Name
+          Value: Terraform-Ubuntu24-Instance
+
+  TerraformSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      GroupDescription: "SSH Access Only"
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: Terraform-SSH-SG
+
+Parameters:
+  KeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: "SSH Key Pair Name"
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: "VPC ID for the instance and security group"
+
+Outputs:
+  InstancePublicIp:
+    Description: "Public IP Address of the EC2 Instance"
+    Value: !GetAtt TerraformInstance.PublicIp
