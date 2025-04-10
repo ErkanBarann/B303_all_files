@@ -1,0 +1,49 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: >
+  This Cloudformation Template creates a Docker machine on EC2 Instance.
+  Docker Machine will run on Ubuntu 24.04 (ami-084568db4383264d4) EC2 Instance with
+  custom security group allowing SSH connections from anywhere on port 22.
+
+Parameters:
+  KeyPairName:
+    Description: Enter the name of your Key Pair for SSH connections.
+    Type: String
+    Default: techpro
+
+Resources:
+  DockerMachineSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable SSH for Docker Machine
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+  DockerMachine:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-084568db4383264d4
+      InstanceType: t2.micro
+      KeyName: !Ref KeyPairName
+      SecurityGroupIds:
+        - !GetAtt DockerMachineSecurityGroup.GroupId
+      Tags:
+        -
+          Key: Name
+          Value: !Sub Docker Machine of ${AWS::StackName}
+      UserData:
+        Fn::Base64: |
+          #! /bin/bash
+          curl -fsSL https://get.docker.com -o get-docker.sh
+          sh get-docker.sh
+          sudo groupadd docker
+          sudo usermod -aG docker ubuntu
+          newgrp docker
+Outputs:
+  WebsiteURL:
+    Description: Docker Machine DNS Name
+    Value: !Sub
+      - ${PublicAddress}
+      - PublicAddress: !GetAtt DockerMachine.PublicDnsName
