@@ -7,33 +7,35 @@ upstream_url="https://github.com/techproeducation-batchs/B303-aws-devops.git"
 echo "🔁 Senkronizasyon başlatılıyor..."
 
 # === Remote bağlantı kontrolü ===
-echo "🔍 Remote bağlantıları kontrol ediliyor..."
 if ! git remote | grep -q "upstream"; then
   echo "🌐 'upstream' remote ekleniyor..."
   git remote add upstream $upstream_url
 fi
 
-# === .terraform klasörü varsa sil ===
-if [ -d "Devops/Ansible/terraform-files/.terraform" ]; then
-  echo "🧹 Büyük dosyalar içeren .terraform klasörü temizleniyor..."
-  rm -rf Devops/Ansible/terraform-files/.terraform
-  git rm -rf --cached Devops/Ansible/terraform-files/.terraform 2>/dev/null
-  echo ".terraform/" >> .gitignore
-fi
-
-# === Git Merge ve Çakışma Kontrolü ===
+# === Upstream fetch ===
 echo "📥 Upstream'den veri çekiliyor..."
 git fetch upstream
 
-echo "🔄 Merge işlemi başlatılıyor..."
-git merge upstream/main --allow-unrelated-histories --no-edit
-if [ $? -ne 0 ]; then
-  echo "❌ Merge sırasında çakışma oluştu. İşlem iptal edildi."
-  git merge --abort
-  exit 1
+# === Geçici merge alanı oluştur ===
+echo "📦 Geçici merge alanı oluşturuluyor..."
+git checkout -b temp-merge upstream/main
+
+# === .terraform klasörü varsa sil ===
+if [ -d "Devops/Ansible/terraform-files/.terraform" ]; then
+  echo "🧹 .terraform klasörü temizleniyor (upstream'den gelen dosyalar)..."
+  rm -rf Devops/Ansible/terraform-files/.terraform
+  git rm -rf --cached Devops/Ansible/terraform-files/.terraform 2>/dev/null
+  echo ".terraform/" >> .gitignore
+  git add .gitignore
+  git commit -m "Remove .terraform after merging upstream"
 fi
 
-# === Değişiklik kontrolü ===
+# === Ana dala dön ve temp-merge ile birleştir ===
+git checkout main
+git merge temp-merge --no-edit
+git branch -D temp-merge
+
+# === Değişiklik varsa push et ===
 if ! git diff --quiet || ! git diff --cached --quiet; then
   echo "✅ Değişiklik bulundu, commit ve push ediliyor..."
   git add -A
