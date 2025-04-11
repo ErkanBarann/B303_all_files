@@ -48,8 +48,8 @@ nginx
 
 1. **Clone the repository:**
 ```bash
-git clone https://github.com/kullanici/arac-kiralama.git
-cd arac-kiralama
+git clone https://github.com/ErkanBarann/car-rental-system-with-terraform.git
+cd car-rental-system-with-terraform
 ```
 
 2. **Set up environment variables:**
@@ -79,6 +79,10 @@ CREATE DATABASE arac_kiralama;
 ```bash
 ./deploy.sh
 ```
+
+## 🛠️ Terraform Integration
+
+This project is fully integrated with Terraform. The `.tf` files provided in the repository allow you to set up the entire infrastructure, including EC2 instances, networking, and RDS, in a modular and automated manner. Simply follow the Terraform configuration to bring the project to life.
 
 ## 🔧 Deployment
 
@@ -193,5 +197,10 @@ Thanks to everyone who contributed to this project!
 
 8. **RDS Endpoint:**
    - Push the RDS endpoint to the project repository on GitHub using the GitHub provider.
+
+## 🌟 Infrastructure (Terraform)
+
+🎯 **Project Solution Files:** The `.tf` files provided in the repository represent the **resolved state** of the project. These files allow the project to be fully deployed and operational. 🚀
+
 
 
