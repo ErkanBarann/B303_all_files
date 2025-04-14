@@ -1,0 +1,184 @@
+- name: Install docker
+  gather_facts: No
+  any_errors_fatal: true
+  hosts: _prod
+  vars:
+    db_public_ip:
+    app_public_ip:
+  become: true
+  tasks:
+    - name: Set the public IP address of the first instance in the '_Ansible_Db' group as a variable
+      set_fact:
+        db_public_ip: "{{ hostvars[groups['_Ansible_Db'][0]].ansible_host }}" 
+        app_public_ip: "{{ hostvars[groups['_Ansible_App'][0]].ansible_host }}"
+    - name: upgrade all packages
+      ansible.builtin.yum: 
+        name: '*'
+        state: latest
+    
+    - name: Install Docker
+      ansible.builtin.package:
+        name: docker
+        state: latest
+
+    - name: Start Docker service
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Add user ec2-user to docker group
+      ansible.builtin.user:
+        name: ec2-user
+        groups: docker
+        append: yes
+
+
+- name: Mysql Database configuration
+  hosts: _Ansible_Db
+  become: true
+  gather_facts: No
+  any_errors_fatal: true
+  vars:
+    container_name: mysql-container
+    image_name: mysql:latest
+
+  tasks:
+    - name: remove {{ container_name }} container
+      community.docker.docker_container:
+        name: "{{ container_name }}"
+        state: absent
+        force_kill: true
+
+    - name: remove "{{ image_name }}" image
+      community.docker.docker_image:
+        name: "{{ image_name }}"
+        state: absent
+
+    - name: Launch mysql docker container
+      community.docker.docker_container:
+        name: "{{ container_name }}"
+        image: "{{ image_name }}"
+        state: started
+        ports: 
+        - "3306:3306"
+        env:
+          MYSQL_ROOT_PASSWORD: R1234r
+          MYSQL_DATABASE: araba_kiralama
+          MYSQL_USER: admin
+          MYSQL_PASSWORD: admin123
+        volumes:
+          - /db-data:/var/lib/mysql
+      register: container_info
+    
+    - name: print the container info
+      ansible.builtin.debug:
+        var: container_info
+
+
+- name: App Server configuration
+  hosts: _Ansible_App
+  become: true
+  gather_facts: No
+  any_errors_fatal: true
+  vars: 
+    container_path: /home/ec2-user/app
+    container_name: app-container
+    image_name: techpro/app
+
+  tasks:
+    - name: copy files to the app node
+      copy:
+        src: /home/ec2-user/Techpro-Rental-Car/
+        dest: "{{ container_path }}"
+
+    - name: remove {{ container_name }} container
+      community.docker.docker_container:
+        name: "{{ container_name }}"
+        state: absent
+        force_kill: true
+
+    - name: remove "{{ image_name }}" image
+      community.docker.docker_image:
+        name: "{{ image_name }}"
+        state: absent
+  
+    - name: build container image
+      community.docker.docker_image:
+        name: "{{ image_name }}"
+        build:
+          path: "{{ container_path }}"
+        source: build
+        state: present
+
+    - name: Launch app docker container
+      community.docker.docker_container:
+        name: "{{ container_name }}"
+        image: "{{ image_name }}"
+        state: started
+        env:
+          FLASK_ENV: production
+          SECRET_KEY: my_secret_key
+          DB_USER: admin
+          DB_PASSWORD: admin123
+          DB_HOST: "{{ db_public_ip }}"
+          DB_NAME: araba_kiralama
+        ports: 
+        - "8000:8000"
+        volumes:
+          - /home/ec2-user/app:/app
+      register: container_info
+    
+    - name: print the container info
+      ansible.builtin.debug:
+        var: container_info
+
+
+- name: Nginx Server configuration
+  hosts: _Ansible_Nginx
+  become: true
+  gather_facts: No
+  any_errors_fatal: true
+  vars:
+    container_path: /home/ec2-user/nginx.conf
+    container_name: nginx-container
+    image_name: nginx:latest
+
+  tasks:
+    - name: copy files to the nginx node
+      copy:
+        src: /home/ec2-user/Techpro-Rental-Car/nginx.conf
+        dest: "{{ container_path }}"
+
+    - name: Set environment variables and run envsubst in one task
+      shell: |
+        export DOMAIN_NAME=techprodevops.com
+        export APP_IP={{ app_public_ip }}
+        envsubst '${DOMAIN_NAME} ${APP_IP}' < {{ container_path }} > /home/ec2-user/nginx2.conf
+
+    - name: remove {{ container_name }} container
+      community.docker.docker_container:
+        name: "{{ container_name }}"
+        state: absent
+        force_kill: true
+
+    - name: remove "{{ image_name }}" image
+      community.docker.docker_image:
+        name: "{{ image_name }}"
+        state: absent
+
+
+    - name: Launch nginx docker container
+      community.docker.docker_container:
+        name: "{{ container_name }}"
+        image: "{{ image_name }}"
+        state: started
+        volumes:
+          - /home/ec2-user/nginx2.conf:/etc/nginx/nginx.conf
+        ports: 
+        - "80:80"
+      register: container_info
+    
+    - name: print the container info
+      ansible.builtin.debug:
+        var: container_info
