@@ -1,0 +1,6 @@
+Backend klasörü .env kontrol edilsin... ve uygulama tasarımına göre düzenlensin...
+frontend de herhangi bir şey yapmaya gerek yok
+nginx.conf dosyasında domain düzenlenecek.
+
+-----
+docker compose dosyasına uygun kubernetes manifestler hazırlanacak ve image'lar daha önce oluşturulup docker hubdan çekilecektir.
