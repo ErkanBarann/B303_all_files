@@ -1,0 +1,119 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-deployment
+  labels:
+    app: todoapp
+spec:
+  selector:
+    matchLabels:
+      name: web
+  template:
+    metadata:
+      labels:
+        name: web
+        app: todoapp
+    spec:
+      containers:
+      - name: myweb
+        image: techproawsdevopsteam/todoapp:v1
+        ports:
+        - containerPort: 3000
+        env:
+          - name: "DBHOST"
+            value: db-service
+        resources:
+          limits:
+            memory: 500Mi
+            cpu: 100m
+          requests:
+            memory: 250Mi
+            cpu: 80m	
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-service
+spec:
+  selector:
+    app: todoapp
+  type: NodePort
+  ports:
+  - port: 3000
+    targetPort: 3000
+    nodePort: 30001
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: db-deployment
+  labels: 
+    app: todoapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: mongo
+  template:
+    metadata:
+      labels:
+        name: mongo
+        app: todoapp
+    spec:
+      containers:
+      - name: mongo
+        image: mongo:5.0
+        resources:
+        ports:
+        - containerPort: 27017
+        volumeMounts: 
+          - name: mongo-storage
+            mountPath: /data/db
+
+      volumes:
+        - name: mongo-storage
+          persistentVolumeClaim:
+            claimName: database-persistent-volume-claim
+
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db-service
+spec:
+  selector:
+    app: todoapp
+  type: ClusterIP  
+  ports:
+  - port: 27017
+    targetPort: 27017
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: db-pv-vol
+  labels:
+    type: local
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: manual
+  hostPath:
+    path: "/home/ubuntu/pv-data"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: database-persistent-volume-claim
+spec:
+  resources:
+    requests:
+      storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: manual
