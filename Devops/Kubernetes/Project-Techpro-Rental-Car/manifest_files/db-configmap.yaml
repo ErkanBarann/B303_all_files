@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  namespace: rentalapp
+  name: dbconfig
+data:
+  MYSQL_DATABASE: araba_kiralama

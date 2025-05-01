@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: rentalapp
+  name: db-deployment
+  labels: 
+    app: rentaldb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: db
+  template:
+    metadata:
+      labels:
+        name: db
+        app: rentaldb
+    spec:
+      containers:
+      - name: mysql
+        image: mysql:8.0
+        envFrom: 
+          - configMapRef:
+              name: dbconfig
+          - secretRef:
+              name: dbsecret
+        readinessProbe:
+          tcpSocket:
+            port: 3306
+          initialDelaySeconds: 10
+          periodSeconds: 20
+        resources:
+        ports:
+        - containerPort: 3306
+        volumeMounts: 
+          - name: mysql-storage
+            mountPath: /var/lib/mysql
+      volumes:
+        - name: mysql-storage
+          persistentVolumeClaim:
+            claimName: database-persistent-volume-claim
+
