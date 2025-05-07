@@ -1,0 +1,93 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: >
+  This CloudFormation Template creates a Docker machine on an EC2 Instance.
+  The Docker Machine will run on Ubuntu 24.04 (ami-084568db4383264d4) EC2 Instance with
+  a custom security group allowing SSH connections from anywhere on port 22 and HTTP on port 80.
+  It also provides full permissions to interact with Amazon ECR and ECS.
+
+Parameters:
+  KeyPairName:
+    Description: Enter the name of your Key Pair for SSH connections.
+    Type: String
+    Default: techpro
+
+Resources:
+  DockerMachineSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable SSH and HTTP for Docker Machine
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0  # Allow SSH from anywhere
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0  # Allow HTTP from anywhere
+
+  DockerMachineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "ec2.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: "DockerMachineECRFullAccess"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "ecr:*"
+                Resource: "*"
+        - PolicyName: "DockerMachineECSFullAccess"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "ecs:*"
+                Resource: "*"
+
+  DockerMachineInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref DockerMachineRole
+
+  DockerMachine:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-084568db4383264d4
+      InstanceType: t3a.medium
+      KeyName: !Ref KeyPairName
+      SecurityGroupIds:
+        - !GetAtt DockerMachineSecurityGroup.GroupId
+      IamInstanceProfile: !Ref DockerMachineInstanceProfile
+      Tags:
+        - Key: Name
+          Value: !Sub Docker Machine of ${AWS::StackName}
+      UserData:
+        Fn::Base64: |
+          #! /bin/bash
+          apt update -y
+          apt install -y unzip
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip awscliv2.zip
+          sudo ./aws/install
+          curl -fsSL https://get.docker.com -o get-docker.sh
+          sh get-docker.sh
+          sudo groupadd docker
+          sudo usermod -aG docker ubuntu
+          newgrp docker
+
+Outputs:
+  DockerMachineInstanceIp:
+    Description: Docker Machine Public IP
+    Value: !GetAtt DockerMachine.PublicIp
