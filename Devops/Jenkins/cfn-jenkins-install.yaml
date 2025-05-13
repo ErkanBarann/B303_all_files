@@ -1,0 +1,61 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Create Jenkins Server on EC2 Instance'
+
+Parameters:
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: 'Select an existing key pair for SSH access'
+    ConstraintDescription: 'Must be a valid existing EC2 KeyPair in your region.'
+  
+  Tags:
+    Type: String
+    Default: 'jenkins-server'
+    Description: 'Tags for the Jenkins server'
+
+Resources:
+  JenkinsSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties: 
+      GroupName: "jenkins-server-sec-gr"
+      GroupDescription: 'Security group for Jenkins server'
+      SecurityGroupIngress:
+        - IpProtocol: 'tcp'
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: '0.0.0.0/0'
+        - IpProtocol: 'tcp'
+          FromPort: '8080'
+          ToPort: '8080'
+          CidrIp: '0.0.0.0/0'
+  
+  JenkinsInstance:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      ImageId: ami-0f88e80871fd81e91
+      InstanceType: t3a.medium
+      KeyName: !Ref KeyName
+      SecurityGroupIds:
+        - Ref: JenkinsSecurityGroup
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          dnf update -y
+          wget -O /etc/yum.repos.d/jenkins.repo https://pkg.jenkins.io/redhat-stable/jenkins.repo
+          rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
+          dnf upgrade
+          dnf install java-21-amazon-corretto -y
+          dnf install jenkins -y
+          systemctl daemon-reload
+          systemctl enable jenkins
+          systemctl start jenkins
+          systemctl status jenkins
+          dnf install git -y
+      Tags:
+        - Key: Name
+          Value: !Ref Tags
+
+
+Outputs:
+  JenkinsURL:
+    Description: 'Jenkins server URL'
+    Value: !Sub 'http://${JenkinsInstance.PublicIp}:8080'
