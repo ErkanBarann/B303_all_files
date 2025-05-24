@@ -1,0 +1,42 @@
+- name: install docker and docker-compose
+  hosts: _dev_server
+  gather_facts: No
+  any_errors_fatal: true
+  become: true
+  remote_user: ec2-user
+  tasks:
+    - name: upgrade all packages
+      ansible.builtin.yum: 
+        name: '*'
+        state: latest
+    
+    - name: Install Docker
+      ansible.builtin.package:
+        name: docker
+        state: latest
+
+    - name: Start Docker service
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Add user ec2-user to docker group
+      ansible.builtin.user:
+        name: ec2-user
+        groups: docker
+        append: yes
+
+    - name: Docker Compose Install
+      shell: |
+          curl -SL https://github.com/docker/compose/releases/download/v2.36.1/docker-compose-linux-x86_64 -o /usr/local/bin/docker-compose
+          chmod +x /usr/local/bin/docker-compose
+  
+
+
+
+
+
+
+
+
