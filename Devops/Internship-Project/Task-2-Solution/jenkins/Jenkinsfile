@@ -1,0 +1,55 @@
+pipeline {
+    agent any
+    environment {
+        AWS_REGION= 'us-east-1'
+    }
+    parameters {
+        choice(name: 'ENVIRONMENT', choices: ['default', 'test', 'dev', 'prod'], description: 'Select the target environment')
+    }   
+    stages {
+        stage('Wait the instance') {
+            steps {
+                script {
+                    echo 'Waiting for the instance'
+                    id = sh(script: 'aws ec2 describe-instances --filters Name=tag-value,Values="${ENVIRONMENT}_server" Name=instance-state-name,Values=running --query Reservations[*].Instances[*].[InstanceId] --output text',  returnStdout:true).trim()
+                    sh 'aws ec2 wait instance-status-ok --instance-ids $id'
+                }
+            }
+        }
+        stage('Configure AWS Instance') {
+            steps {
+                script {
+                    echo 'EC2 Instance Configuration...'
+                    sh 'pwd'
+                    sh """
+                    cd ..
+                    ls -l
+                    """
+                    sh 'ls -l'
+                    sh 'ansible-inventory -i ./Task-2-Solution/ansible/inventory_aws_ec2.yml --graph'
+                    sh """
+                    cd Task-2-Solution/ansible
+                    ansible-playbook -i inventory_aws_ec2.yml --private-key=/var/lib/jenkins/workspace/${ENVIRONMENT} ${ENVIRONMENT}.yml -v
+                    """
+                }
+            }
+        }
+
+    }
+
+    post {
+        always {
+            script {
+                echo 'Pipeline always blocks executed!'
+    
+            }
+        }
+        success {
+            echo 'Pipeline completed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed!'
+        }
+    }   
+
+}

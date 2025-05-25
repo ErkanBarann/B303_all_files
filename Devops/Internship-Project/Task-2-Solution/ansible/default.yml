@@ -1,0 +1,11 @@
+- name: Setup Web Servers Based on Environment
+  hosts: _default_server
+  become: yes
+  remote_user: ec2-user
+
+  tasks:
+    - name: Install Nginx
+      yum:
+        name: nginx
+        state: latest
+        
