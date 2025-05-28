@@ -1,0 +1,41 @@
+- name: Application deploy.
+  hosts: _dev_server
+  become: true
+  remote_user: ec2-user
+  vars: 
+    aws_region: us-east-1
+    aws_account_id: ""
+    ecr_registry: "{{ aws_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com"
+  tasks:
+    - name: Getting AWS account id
+      shell: aws sts get-caller-identity --query 'Account' --output text
+      register: account_id
+
+    - name: Assigning AWS account id to variable
+      set_fact:
+        aws_account_id: "{{ account_id.stdout }}"      
+  
+    - name: log in to AWS ec2-user
+      ansible.builtin.shell: |
+        export PATH=/usr/local/bin:$PATH
+        source ~/.bash_profile
+        aws ecr get-login-password --region {{ aws_region }} | docker login --username AWS --password-stdin {{ ecr_registry }}   
+
+    - name: Copy docker-compose.yml to the server
+      copy:
+        src: "{{ compose_dir }}/docker-compose.yml"
+        dest: /home/ec2-user/docker-compose.yml
+        
+    - name: Start Docker Compose
+      command: docker-compose up -d
+      args:
+        chdir: /home/ec2-user/
+
+    - name: "Gathering docker containers info"
+      community.docker.docker_host_info:
+        containers: yes
+      register: docker_info
+
+    - name: "Debugging docker containers"
+      debug:
+        var: docker_info.containers

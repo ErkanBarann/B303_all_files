@@ -1,0 +1,78 @@
+pipeline {
+    agent any
+
+    environment {
+        // Define any environment variables here
+        AWS_REGION = "us-east-1"
+        APP_NAME = "real-estate-app"
+        APP_REPO_NAME = "real-estate-app-repo"
+        APP_REPO_URL = "https://github.com/techpro-aws-devops/RealEstateAppProject.git" 
+        AWS_ACCOUNT_ID = sh(script: 'export PATH="$PATH:/usr/local/bin" && aws sts get-caller-identity --query Account --output text', returnStdout: true).trim()
+        ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+    }
+    stages {
+        stage('Checkout Source Code') {
+            steps {
+                echo 'Checking out source code from GitHub'
+                git branch: 'main', url: "${APP_REPO_URL}", credentialsId: 'a0c8623e-b3e4-40cb-a1de-a30d6f21751a' // change
+            }
+        }
+        stage('Prepare Tags for Docker Images') {
+            steps {
+                echo 'Preparing Tags for Docker Images'
+                script {
+                    env.IMAGE_TAG_FE = "${ECR_REGISTRY}/${APP_REPO_NAME}:frontend"
+                    env.IMAGE_TAG_BE = "${ECR_REGISTRY}/${APP_REPO_NAME}:backend"
+                }
+            }
+        }
+
+         stage('Build App Docker Images') {
+            steps {
+                echo 'Building App Dev Images'
+                sh """
+                    docker build --force-rm -t "${IMAGE_TAG_FE}" "${WORKSPACE}/True-Roots-Frontend"
+                    docker build --force-rm -t "${IMAGE_TAG_BE}" "${WORKSPACE}/True-Roots-Backend"
+                    docker image ls
+                """
+            }
+        }
+        stage('Create ECR Repository') {
+            steps {
+                echo "Creating ECR Repository ${APP_REPO_NAME}"
+                sh """
+                    aws ecr describe-repositories --repository-names "${APP_REPO_NAME}" --region ${AWS_REGION} || \
+                    aws ecr create-repository --repository-name "${APP_REPO_NAME}" --region ${AWS_REGION}
+                """
+            }
+        }
+
+        stage('Push Images to ECR Repo') {
+            steps {
+                echo "Pushing ${APP_NAME} App Images to ECR Repo"
+                sh """
+                    aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                    docker push "${IMAGE_TAG_FE}"
+                    docker push "${IMAGE_TAG_BE}"
+                """
+            }
+        }
+    }   
+
+    post {
+        always { 
+            echo 'Deleting Docker Images'
+            sh 'docker image prune -af'
+ 
+        }
+        success {
+            // Actions to perform on successful completion
+            echo 'Pipeline completed successfully!'
+        }
+        failure {
+            // Actions to perform on failure
+            echo 'Pipeline failed!'
+        }
+    }
+
+}

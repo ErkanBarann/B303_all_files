@@ -1,0 +1,44 @@
+pipeline {
+    agent any
+    environment {
+        AWS_ACCOUNT_ID=sh(script: 'export PATH="$PATH:/usr/local/bin" && aws sts get-caller-identity --query Account --output text', returnStdout: true).trim()
+    }
+
+    stages {
+        stage('ENVSUBST UPDATE DOCKER COMPOSE') {
+            steps {
+                echo 'env update'
+                sh """
+                cd Task-3-Solution/docker
+                envsubst < docker-compose-template.yml > docker-compose.yml
+                """
+            }
+        }
+       stage('Deploy Application') {
+            steps {
+                echo 'Deploy Application'
+                sh 'ls -l'
+                sh 'ansible --version'
+                sh 'ansible-inventory -i ./Task-3-Solution/ansible/inventory_aws_ec2.yml --graph'
+                sh """
+                    cd Task-3-Solution/ansible
+                    ansible-playbook -i inventory_aws_ec2.yml --private-key=/var/lib/jenkins/workspace/dev -e "compose_dir=${WORKSPACE}/Task-3-Solution/docker" dev.yml -vv
+                """
+             }
+        }
+         
+    }
+    
+    post {
+        always {
+            echo 'CD Pipeline completed'
+        }
+          success {
+            echo 'CD Pipeline completed successfully'
+          }
+         
+        failure {
+            echo 'CD Pipeline failed'
+            }
+        }
+}
