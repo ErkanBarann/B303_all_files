@@ -1,0 +1,47 @@
+services:
+  true-roots-backend:
+    container_name: true-roots-backend
+    image: "${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/real-estate-app-repo:backend"
+    restart: always
+    ports:
+      - "8090:8090"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/realestate_db
+      SPRING_DATASOURCE_USERNAME: team01realestate
+      SPRING_DATASOURCE_PASSWORD: 123456
+    depends_on:
+      - db
+    networks:
+      - app-network
+
+  frontend:
+    image: "${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/real-estate-app-repo:frontend"
+    restart: always
+    ports:
+      - "80:80"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://true-roots-backend:8090  # Dynamic URL passed here
+      - PORT=80  # Dynamic port
+      - AUTH_SECRET= your-strong-secret-key-here-32-characters-minimum
+    depends_on:
+      - true-roots-backend
+    networks:
+      - app-network
+
+  db:
+    image: postgres:16
+    restart: always
+    environment:
+      POSTGRES_DB: realestate_db
+      POSTGRES_USER: team01realestate
+      POSTGRES_PASSWORD: 123456
+    ports:
+      - "5432:5432"
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+    name: app-network
+    
