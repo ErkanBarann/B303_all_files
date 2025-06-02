@@ -1,0 +1,16 @@
+resources:
+  - app-deployment.yaml
+  - app-service.yaml
+  - db-deployment.yaml
+  - db-service.yaml
+  - ui-deployment.yaml
+  - ui-ingress.yaml
+  - ui-service.yaml
+
+images:
+  - name: IMAGE_TAG_UI
+    newName: 244392073887.dkr.ecr.us-east-1.amazonaws.com/real-estate-app-repo:backend-v6
+  - name: IMAGE_TAG_API
+    newName: 244392073887.dkr.ecr.us-east-1.amazonaws.com/real-estate-app-repo:backend-v5
+
+namespace: realestate-prod

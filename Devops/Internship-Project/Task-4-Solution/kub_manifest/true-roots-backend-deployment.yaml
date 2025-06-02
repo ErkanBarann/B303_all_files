@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    kompose.cmd: kompose convert -f docker-compose.yml -o ../kub_manifest/
+    kompose.image-pull-secret: regcred
+    kompose.version: 1.36.0 (ae2a39403)
+  labels:
+    io.kompose.service: true-roots-backend
+  name: true-roots-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      io.kompose.service: true-roots-backend
+  template:
+    metadata:
+      annotations:
+        kompose.cmd: kompose convert -f docker-compose.yml -o ../kub_manifest/
+        kompose.image-pull-secret: regcred
+        kompose.version: 1.36.0 (ae2a39403)
+      labels:
+        io.kompose.service: true-roots-backend
+    spec:
+      containers:
+        - env:
+            - name: SPRING_DATASOURCE_PASSWORD
+              value: "123456"
+            - name: SPRING_DATASOURCE_URL
+              value: jdbc:postgresql://db:5432/realestate_db
+            - name: SPRING_DATASOURCE_USERNAME
+              value: team01realestate
+          image: IMAGE_TAG_API
+          name: true-roots-backend
+          ports:
+            - containerPort: 8090
+              protocol: TCP
+      imagePullSecrets:
+        - name: regcred
+      restartPolicy: Always

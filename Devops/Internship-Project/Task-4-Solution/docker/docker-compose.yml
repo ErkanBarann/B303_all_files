@@ -1,0 +1,56 @@
+services:
+  true-roots-backend:
+    container_name: true-roots-backend
+    image: IMAGE_TAG_API
+    restart: always
+    ports:
+      - "8090:8090"   
+    labels:
+      kompose.image-pull-secret: "regcred"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/realestate_db
+      SPRING_DATASOURCE_USERNAME: team01realestate
+      SPRING_DATASOURCE_PASSWORD: 123456
+    depends_on:
+      - db
+    networks:
+      - app-network
+
+  frontend:
+    image: IMAGE_TAG_UI
+    restart: always
+    ports:
+      - "80:80"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://true-roots-backend:8090  # Dynamic URL passed here
+      - PORT=80  # Dynamic port
+      - AUTH_SECRET= your-strong-secret-key-here-32-characters-minimum
+    depends_on:
+      - true-roots-backend
+    labels:
+      kompose.image-pull-secret: "regcred"
+      kompose.service.type: "nodeport"
+      kompose.service.nodeport.port: "30001"
+      kompose.service.expose: "realestate.techprodevops.com"
+    networks:
+      - app-network
+
+  db:
+    image: postgres:16
+    restart: always
+    environment:
+      POSTGRES_DB: realestate_db
+      POSTGRES_USER: team01realestate
+      POSTGRES_PASSWORD: 123456
+    ports:
+      - "5432:5432"
+    networks:
+      - app-network
+    labels:
+      kompose.image-pull-secret: "regcred"
+
+networks:
+  app-network:
+    driver: bridge
+    name: app-network
+    
