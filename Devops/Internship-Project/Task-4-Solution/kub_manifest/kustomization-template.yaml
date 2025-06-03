@@ -1,0 +1,16 @@
+resources:
+  - true-roots-backend-deployment.yaml
+  - true-roots-backend-service.yaml
+  - db-deployment.yaml
+  - db-service.yaml
+  - frontend-deployment.yaml
+  - frontend-ingress.yaml
+  - frontend-service.yaml
+
+images:
+  - name: IMAGE_TAG_UI
+    newName: "${IMAGE_TAG_FE}"
+  - name: IMAGE_TAG_API
+    newName: "${IMAGE_TAG_BE}"
+
+namespace: realestate

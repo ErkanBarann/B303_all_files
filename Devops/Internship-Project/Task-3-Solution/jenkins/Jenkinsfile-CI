@@ -21,8 +21,8 @@ pipeline {
             steps {
                 echo 'Preparing Tags for Docker Images'
                 script {
-                    env.IMAGE_TAG_FE = "${ECR_REGISTRY}/${APP_REPO_NAME}:frontend"
-                    env.IMAGE_TAG_BE = "${ECR_REGISTRY}/${APP_REPO_NAME}:backend"
+                    env.IMAGE_TAG_FE = "${ECR_REGISTRY}/${APP_REPO_NAME}:frontend-v${BUILD_NUMBER}"
+                    env.IMAGE_TAG_BE = "${ECR_REGISTRY}/${APP_REPO_NAME}:backend-v${BUILD_NUMBER}"
                 }
             }
         }

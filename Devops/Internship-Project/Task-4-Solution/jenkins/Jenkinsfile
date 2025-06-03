@@ -1,0 +1,82 @@
+pipeline {
+    agent any
+
+    parameters {
+        choice(name: 'ENVIRONMENT', choices: ['default', 'test', 'dev', 'prod'], description: 'Select the target environment')
+    } 
+    environment {
+        AWS_REGION = "us-east-1"
+        APP_NAME = "real-estate-app"
+        APP_REPO_NAME = "real-estate-app-repo"
+        AWS_ACCOUNT_ID = sh(script: 'export PATH="$PATH:/usr/local/bin" && aws sts get-caller-identity --query Account --output text', returnStdout: true).trim()
+        ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+        }
+
+    stages { 
+        stage('Wait the instance and update env') {
+            steps {
+                script {
+                    echo 'Waiting for the instance'
+                    INSTANCE_ID = sh(script: 'aws ec2 describe-instances --filters Name=tag-value,Values="${ENVIRONMENT}_server" Name=instance-state-name,Values=running --query Reservations[*].Instances[*].[InstanceId] --output text',  returnStdout:true).trim()
+                    env.NODE_IP = sh(script: 'aws ec2 describe-instances --filters Name=tag-value,Values="${ENVIRONMENT}_server" Name=instance-state-name,Values=running --query Reservations[*].Instances[*].[PublicIpAddress] --output text',  returnStdout:true).trim()
+                    sh 'aws ec2 wait instance-status-ok --instance-ids $INSTANCE_ID'
+                    env.TAG_BE = sh(script: """aws ecr describe-images \
+                            --repository-name ${APP_REPO_NAME} \
+                            --query "sort_by(imageDetails[?starts_with(imageTags[0], 'backend-')], &imagePushedAt)[-1].imageTags[0]" \
+                            --output text
+                            """.stripIndent(), returnStdout: true).trim()
+                    env.TAG_FE = sh(script: """aws ecr describe-images \
+                            --repository-name ${APP_REPO_NAME} \
+                            --query "sort_by(imageDetails[?starts_with(imageTags[0], 'frontend-')], &imagePushedAt)[-1].imageTags[0]" \
+                            --output text
+                            """.stripIndent(), returnStdout: true).trim()
+                    env.IMAGE_TAG_FE = "${ECR_REGISTRY}/${APP_REPO_NAME}:${TAG_FE}"
+                    env.IMAGE_TAG_BE = "${ECR_REGISTRY}/${APP_REPO_NAME}:${TAG_BE}"
+                    echo env.IMAGE_TAG_FE
+                    echo env.IMAGE_TAG_BE
+                    echo env.NODE_IP
+               }
+            }
+           }
+
+        stage('Create K3S Kubernetes Cluster') {
+            steps {
+                echo 'Configure AWS Instance'
+                sh 'ansible-inventory -i ./Task-4-Solution/ansible/inventory_aws_ec2.yml --graph'
+                sh """
+                    cd Task-4-Solution/ansible
+                    ansible-playbook -i inventory_aws_ec2.yml --private-key=/var/lib/jenkins/workspace/${ENVIRONMENT}  -e "JENKINS_IP=${NODE_IP}" ${ENVIRONMENT}.yml -v
+                """
+             }
+        }
+
+        stage('Deploy Application') {
+            steps {
+                echo 'Real Estate Application Deploying'
+                sh """
+                    cd Task-4-Solution/kub_manifest
+                    sed -i 's/127.0.0.1/${NODE_IP}/g' /var/lib/jenkins/kubeconfig.yaml
+                    export KUBECONFIG=/var/lib/jenkins/kubeconfig.yaml
+                    envsubst < kustomization-template.yaml > kustomization.yml
+                    kubectl apply -k .
+                """
+             }
+        }
+         
+    }
+
+    post {
+        always {
+            echo 'CD Pipeline completed'
+        }
+          success {
+            echo 'CD Pipeline completed successfully'
+          }
+         
+        failure {
+            echo 'CD Pipeline failed'
+            }
+        }
+
+
+}

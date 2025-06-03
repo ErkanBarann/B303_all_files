@@ -58,6 +58,9 @@ resource "aws_instance" "tf-devops-server" {
   ami = data.aws_ami.al2023.id
   instance_type = var.instancetype
   key_name      = var.mykey
+  root_block_device {
+    volume_size = 20
+  }
   vpc_security_group_ids = [aws_security_group.tf-devops-sec-gr.id]
   iam_instance_profile = aws_iam_instance_profile.ec2-profile.name
   tags = {
