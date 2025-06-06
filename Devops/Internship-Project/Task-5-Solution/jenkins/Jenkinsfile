@@ -1,0 +1,135 @@
+pipeline {
+    agent any
+    environment {
+        AWS_REGION = "us-east-1"
+        APP_NAME = "real-estate-app"
+        APP_REPO_NAME = "real-estate-app-repo"
+        AWS_ACCOUNT_ID = sh(script: 'export PATH="$PATH:/usr/local/bin" && aws sts get-caller-identity --query Account --output text', returnStdout: true).trim()
+        ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+        }
+
+    stages {   
+
+        stage('Docker Image Tag Update') {
+            steps {
+                script {
+                    echo 'Docker Image Tag Update'
+                    env.TAG_BE = sh(script: """aws ecr describe-images \
+                            --repository-name ${APP_REPO_NAME} \
+                            --query "sort_by(imageDetails[?starts_with(imageTags[0], 'backend-')], &imagePushedAt)[-1].imageTags[0]" \
+                            --output text
+                            """.stripIndent(), returnStdout: true).trim()
+                    env.TAG_FE = sh(script: """aws ecr describe-images \
+                            --repository-name ${APP_REPO_NAME} \
+                            --query "sort_by(imageDetails[?starts_with(imageTags[0], 'frontend-')], &imagePushedAt)[-1].imageTags[0]" \
+                            --output text
+                            """.stripIndent(), returnStdout: true).trim()
+                    env.IMAGE_TAG_FE = "${ECR_REGISTRY}/${APP_REPO_NAME}:${TAG_FE}"
+                    env.IMAGE_TAG_BE = "${ECR_REGISTRY}/${APP_REPO_NAME}:${TAG_BE}"
+                    echo env.IMAGE_TAG_FE
+                    echo env.IMAGE_TAG_BE
+               }
+            }
+           }   
+        stage('Create K8s Objects') {
+            steps {
+                echo 'Creating Kubernetes Objects'
+                sh """
+                kubectl get ns realestate || kubectl create ns realestate
+                kubectl delete secret regcred -n realestate || echo "there is no regcred secret in realestate namespace"
+                kubectl create secret generic regcred -n realestate \
+                  --from-file=.dockerconfigjson=/var/lib/jenkins/.docker/config.json \
+                  --type=kubernetes.io/dockerconfigjson
+                   """
+            }
+        }  
+
+        stage('Nginx Ingress Controller Install') {
+            steps {
+                echo 'Ingress Install'
+                sh """ 
+                    helm upgrade --install ingress-nginx ingress-nginx \
+                      --repo https://kubernetes.github.io/ingress-nginx \
+                      --namespace ingress-nginx --create-namespace
+                   """
+            }
+        }
+        
+        stage('Wait Nginx Ingress Controller Install') {
+            steps {
+                echo 'Ingress Install'
+                sh '. ./Task-5-Solution/wait.sh'
+
+            }
+        }   
+        stage('Deploy Application on EKS') {
+            steps {
+                echo 'Real Estate App Deploying'
+                sh """
+                  envsubst < Task-5-Solution/realestate_chart/values-template.yaml > Task-5-Solution/realestate_chart/values.yaml
+                  sed -i s/HELM_VERSION/${BUILD_NUMBER}/ Task-5-Solution/realestate_chart/Chart.yaml
+                  helm plugin list | grep -q "s3" || helm plugin install https://github.com/hypnoglow/helm-s3.git
+                  aws s3 ls s3://realestate-techpro/stable/myapp/index.yaml || helm s3 init s3://realestate-techpro/stable/myapp
+                  helm repo add realestate-app-repo s3://realestate-techpro/stable/myapp/ || echo "repository name already exists"
+                  helm repo update
+                  helm package Task-5-Solution/realestate_chart
+                  helm s3 push --force realestate_chart-${BUILD_NUMBER}.tgz realestate-app-repo
+                  helm repo update
+                  helm upgrade --install \
+                    realestate-app-release realestate-app-repo/realestate_chart --version ${BUILD_NUMBER} \
+                    --namespace realestate
+                """
+             }
+        }
+
+        stage('Deploy Monitoring tools on EKS') {
+            steps {
+                echo 'Monitoring tools deploying'
+                sh """
+                  kubectl get ns monitoring || kubectl create ns monitoring
+                  helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+                  helm repo update
+                  helm upgrade --install kubeprostack --namespace monitoring prometheus-community/kube-prometheus-stack
+                  kubectl apply -f Task-5-Solution/prometheus-grafana/ingress.yaml
+                """
+             }
+        }
+        
+        }
+    
+
+    post {
+        always {
+            echo 'Deleting all local images'
+            sh 'docker image prune -af'
+        }
+        failure {
+            echo 'Delete application.'
+            sh 'helm uninstall realestate-app-release -n realestate'
+            echo 'Delete the Ingress controller.'
+            sh 'helm uninstall ingress-nginx -n ingress-nginx'
+            echo 'Delete the Monitoring tools.'
+            sh 'helm uninstall kubeprostack -n monitoring'
+            echo 'Prune all local Docker images'
+            sh 'docker image prune -af'
+        }
+        success {
+            echo 'Application deployed successfully!'
+            timeout(time: 5, unit: 'DAYS') {
+                    input message: 'Approve terminate'
+                }
+            echo 'Delete application.'
+            sh 'helm uninstall realestate-app-release -n realestate'
+            echo 'Delete the Ingress controller.'
+            sh 'helm uninstall ingress-nginx -n ingress-nginx'
+            echo 'Delete the Monitoring tools.'
+            sh 'helm uninstall kubeprostack -n monitoring'
+            echo 'Prune all local Docker images'
+            sh 'docker image prune -af'
+            echo 'Delete the ECR repository (this will remove all images in the repository)'
+            sh "aws ecr delete-repository --repository-name ${APP_REPO_NAME} --region ${AWS_REGION} --force"
+            echo 'Delete the EKS cluster'
+            sh "eksctl delete cluster --name realestate-cluster --region us-east-1"
+        }
+    }
+}
